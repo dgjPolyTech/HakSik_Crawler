@@ -1,26 +1,66 @@
-# 라이브러리 불러오기
-# requests는 페이지에서 데이터들을 긁어오는 역할, BeautifulSoup는 그걸 보기좋게 파싱하는 역할
-import requests
+from selenium import webdriver
+from selenium_stealth import stealth
 from bs4 import BeautifulSoup
+import time
 
-# 크롤링할 목표 사이트의 주소 설정
-url = "https://www.kopo.ac.kr/jungsu/content.do?menu=247"
+driver = None
+html_source = None
 
-# 
-headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-response = requests.get(url, headers=headers)
-#contents > div > div.meal_box > table.tbl_table.menu > tbody > tr:nth-child(2) > td:nth-child(3) > span
-#contents > div > div.meal_box > table.tbl_table.menu > tbody > tr:nth-child(3) > td:nth-child(3) > span
+try:
+    # Chrome 드라이버 실행 관련 옵션 설정
+    options = webdriver.ChromeOptions()
+    # options.add_argument("start-maximized")
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+    
+    driver = webdriver.Chrome(options=options)
 
-soup = BeautifulSoup(response.text, 'html.parser')
-lunchs = soup.select('#contents > div > div.meal_box > table.tbl_table.menu > tbody')
+    # Stealth 기능 적용 
+    # 해당 설정을 통해 봇 감지 옵션을 피할 수 있음.
+    stealth(driver,
+            languages=["ko-KR", "ko"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True,
+            )
 
-print(lunchs)
-# if(section):
-#     news_titles = section.find_all('strong', class_="sa_text_strong")
+    url = "https://www.kopo.ac.kr/jungsu/content.do?menu=247"
+    print("페이지 접속 중...")
+    driver.get(url)
+    time.sleep(2)
 
-#     for title in news_titles:
-#         print(title.get_text())
+    html_source = driver.page_source
 
-# else:
-#     print("뉴스 정보를 찾을 수 없습니다.")
+except Exception as e:
+    print(f"오류가 발생했습니다: {e}")
+
+finally:
+    if driver:
+        driver.quit()
+
+if html_source:
+    print("데이터 수집 완료. 가공 시작...")
+    soup = BeautifulSoup(html_source, 'html.parser')
+    arr_brakfast_menus = []
+    arr_lunch_menus = []
+    arr_dinner_menus = []
+
+    # 학식 메뉴 정보 수집
+    for i in range(1, 6):
+        menu_row_brakfast = soup.select_one(f'#contents > div > div.meal_box > table.tbl_table.menu > tbody > tr:nth-child({i}) > td:nth-child(2)').text.replace('\n', '')
+        menu_row_lunch = soup.select_one(f'#contents > div > div.meal_box > table.tbl_table.menu > tbody > tr:nth-child({i}) > td:nth-child(3)').text.replace('\n', '')
+        menu_row_dinner = soup.select_one(f'#contents > div > div.meal_box > table.tbl_table.menu > tbody > tr:nth-child({i}) > td:nth-child(4)').text.replace('\n', '')
+
+        arr_brakfast_menus.append(menu_row_brakfast)
+        arr_lunch_menus.append(menu_row_lunch)
+        arr_dinner_menus.append(menu_row_dinner)
+
+    print("오늘의 조식: "+arr_brakfast_menus[0])
+    print("오늘의 중식: "+arr_lunch_menus[0])
+    print("오늘의 석식: "+arr_dinner_menus[0])
+else:
+    print("오류: HTML 소스를 가져오지 못했습니다.")
